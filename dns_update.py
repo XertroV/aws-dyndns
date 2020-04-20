@@ -9,12 +9,13 @@ class AWSDynDns(object):
         self.client = session.client('route53')
         self.domain = domain
         self.record = record
-        self.ttl = ttl
+        self.ttl = int(ttl)
         self.hosted_zone_id = hosted_zone_id
         if self.record:
             self.fqdn = "{0}.{1}".format(self.record, self.domain)
         else:
             self.fqdn = self.domain
+        print(f"Using full record name: {self.fqdn}")
 
     def get_external_ip(self):
         try:
@@ -50,17 +51,30 @@ class AWSDynDns(object):
         found_flag = False
 
         if len(response['ResourceRecordSets']) == 0:
-            return found_flag
+            return False
             #raise Exception("Could not find any records matching domain: {0}".format(self.domain))
 
-        if self.fqdn in response['ResourceRecordSets'][0]['Name']:
-            for ip in response['ResourceRecordSets'][0]['ResourceRecords']:
-                if self.external_ip == ip['Value']:
-                    found_flag = True
-        else:
-            raise Exception("Cannot find record set for domain: {0}".format(self.fqdn))
+        records = list([r for r in response['ResourceRecordSets'] if r['Name'] ==  self.fqdn])
 
-        return found_flag
+        if len(records) == 1:
+           return any(self.external_ip == ip['Value'] for ip in records[0]['ResourceRecords'])
+
+        if len(records) == 0:
+           return False
+
+        print(f"unexpectedly got more than 1 record back for exact fqdn match: {records}")
+        print(f"continuing presuming we need to update...")
+        return False
+        # only expecting 1 or 0 results back
+        #if self.fqdn in response['ResourceRecordSets'][0]['Name']:
+        #    for ip in response['ResourceRecordSets'][0]['ResourceRecords']:
+        #        if self.external_ip == ip['Value']:
+        #            found_flag = True
+        #else:
+        #    print(response)
+        #    raise Exception("Cannot find record set for domain: {0}".format(self.fqdn))
+
+        #return found_flag
 
     def update_record(self):
         if not self.hosted_zone_id:
